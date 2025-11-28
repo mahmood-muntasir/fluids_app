@@ -1,2 +1,4 @@
-streamlit 
-numpy 
+streamlit
+numpy
+pandas
+matplotlib
