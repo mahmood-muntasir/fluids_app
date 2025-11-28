@@ -4,6 +4,7 @@ import textwrap
 
 import numpy as np
 import streamlit as st
+import matplotlib.pyplot as plt
 
 # ------------------ Page config ------------------ #
 st.set_page_config(
@@ -423,6 +424,52 @@ By chain rule:
 
 Extending to vector form gives the full material derivative. This is a
 key link between Eulerian and Lagrangian descriptions.
+""",
+        },
+        "3.3 Differential Continuity (Incompressible)": {
+            "Intuition": """
+Continuity in differential form says: mass cannot magically appear or
+disappear at a point. For incompressible flow, it reduces to 'the
+velocity field must have zero divergence' — roughly, what flows into a
+tiny cube must flow out.
+""",
+            "Math": r"""
+General continuity (incompressible, constant ρ):
+
+    ∂u/∂x + ∂v/∂y + ∂w/∂z = 0.
+
+For 2D incompressible flow (x–y plane):
+
+    ∂u/∂x + ∂v/∂y = 0.
+""",
+            "Rigor": """
+Apply conservation of mass to a differential control volume and shrink
+its dimensions. For constant density, the rate of density change drops
+out, leaving only the divergence of the velocity field. Setting this
+to zero enforces incompressibility in the differential sense.
+""",
+        },
+        "3.4 Navier–Stokes Big Picture (Don’t Panic)": {
+            "Intuition": """
+Navier–Stokes is just Newton’s second law for a fluid at every point:
+inertia = pressure forces + viscous forces + body forces.
+
+You are not expected to solve full N-S in an undergrad intro fluids
+course; you mostly see special simplified cases (like laminar pipe flow).
+""",
+            "Math": r"""
+Vector form (incompressible, Newtonian):
+
+    ρ D\mathbf{u}/Dt = -∇p + μ ∇²\mathbf{u} + ρ \mathbf{g}.
+
+Expanded in components (for each direction x,y,z).
+""",
+            "Rigor": """
+Starting from conservation of linear momentum for a fluid element and
+using the Cauchy stress decomposition (pressure + viscous stresses),
+together with the Newtonian constitutive relation for viscous stress,
+one arrives at the Navier–Stokes equations. They are nonlinear PDEs and
+rarely solved analytically except in highly simplified geometries.
 """,
         },
     },
@@ -1045,6 +1092,150 @@ def pump_sizing_calculator():
         st.write(f"Required shaft power: **{P_shaft/1000:.2f} kW**")
 
 
+def manometer_calculator():
+    st.subheader("Two-Fluid U-Tube Manometer")
+
+    st.write(
+        wrap(
+            "Simple two-fluid U-tube: left leg connected to p₁, right leg to p₂, "
+            "with heights h₁ and h₂ of different fluids. Here we'll assume "
+            "fluid 1 (light, e.g. water) over fluid 2 (heavy, e.g. mercury). "
+            "You can solve for p₂ if p₁ is known."
+        )
+    )
+    col1, col2 = st.columns(2)
+    with col1:
+        p1 = st.number_input("Pressure p₁ [Pa]", value=101325.0)
+        rho1 = st.number_input("Density of top fluid ρ₁ [kg/m³]", value=1000.0)
+        rho2 = st.number_input("Density of bottom fluid ρ₂ [kg/m³]", value=13600.0)
+        h1 = st.number_input("Height of fluid 1 column h₁ [m]", value=0.3)
+        h2 = st.number_input("Height of fluid 2 column h₂ [m]", value=0.2)
+
+    if st.button("Compute p₂", key="mano_btn"):
+        g = 9.81
+        # Walk from p1 down through h1 (fluid1) and h2 (fluid2) to p2:
+        p2 = p1 + rho1 * g * h1 + rho2 * g * h2
+        st.write(f"Resulting pressure at p₂: **{p2:.1f} Pa**")
+
+
+def buoyancy_calculator():
+    st.subheader("Buoyancy & Floating Check")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        rho_fluid = st.number_input("Fluid density ρ_fluid [kg/m³]", value=1000.0)
+        mass_body = st.number_input("Body mass [kg]", value=50.0)
+        volume_body = st.number_input("Body volume [m³]", value=0.06)
+
+    if st.button("Check flotation", key="buoy_btn"):
+        g = 9.81
+        W = mass_body * g
+        F_B_full = rho_fluid * g * volume_body
+        st.write(f"Weight W = {W:.1f} N")
+        st.write(f"Buoyant force if fully submerged F_B = {F_B_full:.1f} N")
+
+        if F_B_full < W:
+            st.error("Even fully submerged, buoyant force < weight → it sinks.")
+        else:
+            V_disp_needed = mass_body / rho_fluid
+            fraction = V_disp_needed / volume_body
+            st.success("It can float.")
+            st.write(f"Displaced volume needed: {V_disp_needed:.4f} m³")
+            st.write(f"Fraction of body volume submerged: {fraction*100:.1f}%")
+
+def orifice_calculator():
+    st.subheader("Orifice Flow – Discharge from a Tank")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        Cd = st.number_input("Discharge coefficient C_d", value=0.62)
+        D = st.number_input("Orifice diameter D [m]", value=0.05)
+        h = st.number_input("Head above orifice h [m]", value=1.5)
+
+    if st.button("Compute flow rate Q", key="orifice_btn"):
+        g = 9.81
+        A = math.pi * D**2 / 4
+        Q = Cd * A * math.sqrt(2 * g * h)
+        st.write(f"Area A = {A:.4f} m²")
+        st.write(f"Flow rate **Q = {Q:.4f} m³/s**")
+
+def critical_flow_calculator():
+    st.subheader("Critical Flow in Rectangular Channel")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        b = st.number_input("Channel width b [m]", value=2.0)
+        Q = st.number_input("Flow rate Q [m³/s]", value=1.0)
+
+    if st.button("Compute critical depth & velocity", key="crit_btn"):
+        g = 9.81
+        # Specific discharge q = Q / b
+        q = Q / b
+        # For rectangular channel, y_c = (q^2 / g)^(1/3)
+        yc = (q**2 / g) ** (1.0 / 3.0)
+        Vc = q / yc
+        Frc = Vc / math.sqrt(g * yc)
+        st.write(f"Critical depth y_c = {yc:.3f} m")
+        st.write(f"Critical velocity V_c = {Vc:.3f} m/s")
+        st.write(f"Froude number at critical: Fr_c = {Frc:.2f} (≈1 by definition)")
+
+def drag_force_calculator():
+    st.subheader("Drag Force on a Body")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        rho = st.number_input("Fluid density ρ [kg/m³]", value=1.2)
+        V = st.number_input("Velocity V [m/s]", value=15.0)
+        Cd = st.number_input("Drag coefficient C_D", value=0.8)
+        A = st.number_input("Reference area A [m²]", value=0.5)
+
+    if st.button("Compute drag force", key="drag_btn"):
+        F_D = 0.5 * rho * V**2 * Cd * A
+        st.write(f"Drag force **F_D = {F_D:.2f} N**")
+
+
+def bernoulli_two_point_calculator():
+    st.subheader("Two-Point Bernoulli (with Head Loss / Pump)")
+
+    st.write(
+        wrap(
+            "This uses the head form of Bernoulli between point 1 and 2. "
+            "You can include pump head (added) and head loss (lost). "
+            "If you leave pump head = 0 and head loss = 0, it's ideal Bernoulli."
+        )
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        p1 = st.number_input("p₁ [Pa]", value=101325.0)
+        V1 = st.number_input("V₁ [m/s]", value=1.0)
+        z1 = st.number_input("z₁ [m]", value=0.0)
+        p2 = st.number_input("p₂ [Pa]", value=101325.0)
+        V2 = st.number_input("V₂ [m/s]", value=2.0)
+        z2 = st.number_input("z₂ [m]", value=5.0)
+        rho = st.number_input("ρ [kg/m³]", value=1000.0)
+        h_p = st.number_input("Pump head h_p [m] (positive if adding)", value=0.0)
+        h_L = st.number_input("Head loss h_L [m]", value=0.0)
+
+    if st.button("Check Bernoulli balance", key="bern2_btn"):
+        g = 9.81
+        gamma = rho * g
+
+        H1 = p1 / gamma + V1**2 / (2 * g) + z1 + h_p
+        H2 = p2 / gamma + V2**2 / (2 * g) + z2 + h_L
+
+        st.write(f"Total head at 1 (including pump): **H₁ = {H1:.3f} m**")
+        st.write(f"Total head at 2 (including loss): **H₂ = {H2:.3f} m**")
+
+        diff = H1 - H2
+        st.write(f"H₁ - H₂ = {diff:.4f} m (should be ~0 if equation balances)")
+
+        if abs(diff) < 0.1:
+            st.success("Looks consistent (within 0.1 m difference).")
+        else:
+            st.warning("Significant mismatch — re-check your inputs and signs.")
+
+
 def calculators_page():
     st.header("🧮 Calculators")
     calc = st.selectbox(
@@ -1055,6 +1246,12 @@ def calculators_page():
             "Hydrostatic force on gate",
             "Hydraulic jump (rectangular channel)",
             "Pump sizing",
+            "Manometer pressure (two-fluid U-tube)",
+            "Buoyancy & floating check",
+            "Orifice discharge",
+            "Critical flow (rectangular channel)",
+            "Drag force",
+            "Two-point Bernoulli (head form)",
         ],
     )
 
@@ -1068,6 +1265,18 @@ def calculators_page():
         hydraulic_jump_calculator()
     elif calc == "Pump sizing":
         pump_sizing_calculator()
+    elif calc == "Manometer pressure (two-fluid U-tube)":
+        manometer_calculator()
+    elif calc == "Buoyancy & floating check":
+        buoyancy_calculator()
+    elif calc == "Orifice discharge":
+        orifice_calculator()
+    elif calc == "Critical flow (rectangular channel)":
+        critical_flow_calculator()
+    elif calc == "Drag force":
+        drag_force_calculator()
+    elif calc == "Two-point Bernoulli (head form)":
+        bernoulli_two_point_calculator()
 
 
 # ------------------ Visuals Page ------------------ #
@@ -1075,6 +1284,7 @@ def calculators_page():
 def visuals_page():
     st.header("📈 Visual Intuition")
 
+    # ---- Laminar pipe velocity profile ----
     st.subheader("Laminar Pipe Flow – Velocity Profile")
     st.markdown(
         "Adjust radius and pressure gradient and see how the parabolic profile changes."
@@ -1088,17 +1298,44 @@ def visuals_page():
         )
 
     mu = 1.0e-3
-    # axial direction z; using Hagen–Poiseuille u(r) = (Δp / (4 μ L))(R² - r²)
-    # here dpdx represents Δp/L (positive), so u(r) = (dpdx / (4 μ))(R² - r²)
-    r_vals = np.linspace(0, R, 100)
+    r_vals = np.linspace(0, R, 200)
     u_vals = (dpdx / (4 * mu)) * (R**2 - r_vals**2)
+    u_vals[u_vals < 0] = 0.0
 
     with col2:
-        st.line_chart(
-            {"u(r) [m/s]": u_vals},
-            x=None,
-        )
+        fig, ax = plt.subplots()
+        ax.plot(r_vals, u_vals)
+        ax.set_xlabel("r [m]")
+        ax.set_ylabel("u(r) [m/s]")
+        ax.set_title("Parabolic velocity profile (laminar pipe flow)")
+        ax.grid(True)
+        st.pyplot(fig)
         st.caption("Velocity is maximum at the center and zero at the wall (no-slip).")
+
+    st.markdown("---")
+
+    # ---- Hydrostatic pressure vs depth ----
+    st.subheader("Hydrostatic Pressure vs Depth in a Tank")
+    col3, col4 = st.columns(2)
+    with col3:
+        rho = st.number_input("Fluid density ρ [kg/m³] (for plot)", value=1000.0, key="rho_vis")
+        H = st.slider("Fluid depth H [m]", 0.5, 10.0, 3.0, step=0.5)
+        p_atm = st.number_input("Atmospheric pressure p_atm [Pa]", value=101325.0, key="patm_vis")
+
+    g = 9.81
+    z_vals = np.linspace(0, H, 200)  # z measured downward from free surface
+    p_vals = p_atm + rho * g * z_vals
+
+    with col4:
+        fig2, ax2 = plt.subplots()
+        ax2.plot(p_vals, z_vals)
+        ax2.invert_yaxis()
+        ax2.set_xlabel("Pressure p [Pa]")
+        ax2.set_ylabel("Depth below free surface z [m]")
+        ax2.set_title("Hydrostatic pressure distribution")
+        ax2.grid(True)
+        st.pyplot(fig2)
+        st.caption("Linear increase of pressure with depth in a static, incompressible fluid.")
 
 
 # ------------------ Guided Practice Problems ------------------ #
@@ -1402,6 +1639,17 @@ QUIZ_BANK = {
             "answer": 2,
             "expl": "Because pressure increases with depth, the resultant force acts below the centroid.",
         },
+        {
+            "q": "Buoyant force on a fully submerged body depends on:",
+            "options": [
+                "The body’s weight.",
+                "The body’s shape only.",
+                "The volume of displaced fluid and fluid density.",
+                "The pressure at the free surface only.",
+            ],
+            "answer": 2,
+            "expl": "Archimedes: F_B = ρ_fluid g V_disp. It depends on displaced volume and fluid density.",
+        },
     ],
     "Bernoulli & CV": [
         {
@@ -1426,6 +1674,17 @@ QUIZ_BANK = {
             "answer": 2,
             "expl": "Continuity enforces mass conservation: total mass flow in equals total mass flow out in steady state.",
         },
+        {
+            "q": "The momentum equation for a CV is essentially:",
+            "options": [
+                "Conservation of energy.",
+                "Newton’s 2nd law (F = m a) applied to the control volume.",
+                "Conservation of entropy.",
+                "An empirical correlation with no physical basis.",
+            ],
+            "answer": 1,
+            "expl": "Momentum equation is Newton's 2nd law in integral form for a control volume.",
+        },
     ],
     "Internal Flow": [
         {
@@ -1449,6 +1708,17 @@ QUIZ_BANK = {
             ],
             "answer": 2,
             "expl": "The Moody chart relates f to both Re and ε/D in turbulent flow.",
+        },
+        {
+            "q": "Major losses in a pipe refer to:",
+            "options": [
+                "Losses due to fittings only.",
+                "Losses due to friction along straight pipe sections.",
+                "Entrance and exit losses.",
+                "Measurement errors.",
+            ],
+            "answer": 1,
+            "expl": "Major losses are from friction over the length of the pipe. Fittings/valves give minor losses.",
         },
     ],
 }
@@ -1548,6 +1818,57 @@ def exam_mode_page():
         )
 
 
+# ------------------ Progress Tracker ------------------ #
+
+PROGRESS_TOPICS = [
+    "Hydrostatics – pressure & manometers",
+    "Hydrostatics – forces on surfaces",
+    "Buoyancy & stability",
+    "Continuity (CV + differential)",
+    "Bernoulli & energy equation",
+    "Momentum equation & forces",
+    "Laminar pipe flow",
+    "Turbulent pipe flow & Moody chart",
+    "Major/minor losses & simple networks",
+    "Dimensional analysis & π groups",
+    "Boundary layers & drag",
+    "Open-channel flow & Froude number",
+]
+
+
+def progress_page():
+    st.header("📊 Progress Tracker for Juairiya")
+
+    st.write(
+        wrap(
+            "This is just for you to *feel* how much you actually know already. "
+            "Tick a topic when you feel: 'I can explain this to someone else in simple words.'"
+        )
+    )
+
+    if "progress" not in st.session_state:
+        st.session_state.progress = {t: False for t in PROGRESS_TOPICS}
+
+    new_state = {}
+    for t in PROGRESS_TOPICS:
+        new_state[t] = st.checkbox(t, value=st.session_state.progress.get(t, False))
+
+    st.session_state.progress = new_state
+
+    done = sum(1 for v in new_state.values() if v)
+    total = len(new_state)
+    st.write(f"✅ Topics you feel okay with: **{done} / {total}**")
+
+    if done == 0:
+        st.info("Start with hydrostatics or continuity – they support everything else.")
+    elif done < total / 2:
+        st.info("You already have a base. Keep going, one topic at a time.")
+    elif done < total:
+        st.success("You’re more than halfway through the heavy stuff.")
+    else:
+        st.success("You’ve checked everything – fluids exam should feel much lighter now.")
+
+
 # ------------------ Main ------------------ #
 
 def main():
@@ -1558,7 +1879,16 @@ def main():
 
     page = st.sidebar.radio(
         "Go to",
-        ["Welcome", "Concept Tutor", "Calculators", "Visuals", "Guided Practice", "Quizzes", "Exam Mode"],
+        [
+            "Welcome",
+            "Concept Tutor",
+            "Calculators",
+            "Visuals",
+            "Guided Practice",
+            "Quizzes",
+            "Exam Mode",
+            "Progress Tracker",
+        ],
     )
 
     st.sidebar.markdown("---")
@@ -1581,6 +1911,8 @@ def main():
         quiz_page()
     elif page == "Exam Mode":
         exam_mode_page()
+    elif page == "Progress Tracker":
+        progress_page()
 
 
 if __name__ == "__main__":
